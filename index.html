@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Status Dashboard — AAP 2.4 Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+  <style>
+    /* ── CSS Variables ─────────────────────────────────────────── */
+    :root {
+      --bg:          #080C12;
+      --bg2:         #0D1117;
+      --bg3:         #161B22;
+      --border:      #21262D;
+      --border2:     #30363D;
+      --green:       #3FB950;
+      --green-dim:   rgba(63,185,80,0.15);
+      --green-glow:  rgba(63,185,80,0.4);
+      --red:         #EE0000;
+      --red-dim:     rgba(238,0,0,0.15);
+      --blue:        #58A6FF;
+      --blue-dim:    rgba(88,166,255,0.15);
+      --orange:      #F0883E;
+      --orange-dim:  rgba(240,136,62,0.15);
+      --purple:      #BC8CFF;
+      --purple-dim:  rgba(188,140,255,0.15);
+      --yellow:      #D29922;
+      --yellow-dim:  rgba(210,153,34,0.15);
+      --teal:        #39D0D0;
+      --teal-dim:    rgba(57,208,208,0.15);
+      --text:        #E6EDF3;
+      --text-muted:  #8B949E;
+      --text-dim:    #444C56;
+      --font-mono:   'Share Tech Mono', monospace;
+      --font-ui:     'Exo 2', sans-serif;
+      --font-hud:    'Orbitron', monospace;
+      --radius:      8px;
+      --transition:  0.2s ease;
+    }
+
+    /* ── Reset & Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 14px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .layout { max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(8px);
+    }
+    .header::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--red) 0%, var(--orange) 40%, var(--green) 100%);
+      animation: scan-line 4s linear infinite;
+    }
+    @keyframes scan-line {
+      0%   { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-logo {
+      font-family: var(--font-hud);
+      font-size: 18px; font-weight: 900;
+      color: var(--red);
+      letter-spacing: 2px;
+      text-shadow: 0 0 20px rgba(238,0,0,0.5);
+    }
+    .header-logo span { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 8px; letter-spacing: 1px; }
+    .header-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+    .header-meta strong { color: var(--blue); }
+
+    .header-right { display: flex; align-items: center; gap: 16px; }
+
+    .status-badge {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 1px;
+      border: 1px solid;
+      transition: all var(--transition);
+    }
+    .status-badge.ok  { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+    .status-badge.deg { color: var(--orange); border-color: var(--orange); background: var(--orange-dim); }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    .status-badge.ok  .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green-glow); }
+    .status-badge.deg .status-dot { background: var(--orange); }
+    @keyframes pulse-dot {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.4); opacity: 0.7; }
+    }
+
+    .clock { font-family: var(--font-hud); font-size: 14px; color: var(--text-muted); letter-spacing: 2px; }
+
+    /* ── KPI Cards ─────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .kpi-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .kpi-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .kpi-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    }
+    .kpi-card.blue::before   { background: var(--blue); }
+    .kpi-card.green::before  { background: var(--green); }
+    .kpi-card.orange::before { background: var(--orange); }
+    .kpi-card.purple::before { background: var(--purple); }
+
+    .kpi-label {
+      font-size: 10px; font-weight: 600; letter-spacing: 2px;
+      color: var(--text-muted); text-transform: uppercase;
+      font-family: var(--font-mono);
+      margin-bottom: 12px;
+    }
+    .kpi-value {
+      font-family: var(--font-hud);
+      font-size: 36px; font-weight: 700;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .kpi-card.blue   .kpi-value { color: var(--blue); text-shadow: 0 0 20px rgba(88,166,255,0.3); }
+    .kpi-card.green  .kpi-value { color: var(--green); text-shadow: 0 0 20px rgba(63,185,80,0.3); }
+    .kpi-card.orange .kpi-value { color: var(--orange); }
+    .kpi-card.purple .kpi-value { color: var(--purple); }
+
+    .kpi-sub { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+    /* ── Section Headers ───────────────────────────────────────── */
+    .section-header {
+      display: flex; align-items: center; gap: 12px;
+      margin: 32px 0 16px;
+    }
+    .section-title {
+      font-family: var(--font-hud);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .section-line {
+      flex: 1; height: 1px;
+      background: linear-gradient(90deg, var(--border2), transparent);
+    }
+    .section-count {
+      font-family: var(--font-mono);
+      font-size: 10px; color: var(--text-dim);
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 2px 8px;
+    }
+
+    /* ── Services Grid ─────────────────────────────────────────── */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .svc-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex; align-items: center; gap: 12px;
+      transition: all var(--transition);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      text-decoration: none; color: inherit;
+    }
+    .svc-card::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.02), transparent);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .svc-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+    .svc-card:hover::after { opacity: 1; }
+    .svc-card.online  { border-left: 3px solid var(--green); }
+    .svc-card.offline { border-left: 3px solid var(--red); }
+    .svc-card.unknown { border-left: 3px solid var(--yellow); }
+
+    .svc-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .svc-card.online  .svc-dot { background: var(--green); box-shadow: 0 0 8px var(--green-glow); animation: pulse-dot 2s ease-in-out infinite; }
+    .svc-card.offline .svc-dot { background: var(--red); }
+    .svc-card.unknown .svc-dot { background: var(--yellow); animation: pulse-dot 3s ease-in-out infinite; }
+
+    .svc-info { flex: 1; min-width: 0; }
+    .svc-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .svc-url  { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .svc-badge {
+      font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 10px;
+      letter-spacing: 1px; flex-shrink: 0;
+    }
+    .svc-card.online  .svc-badge { color: var(--green); background: var(--green-dim); border: 1px solid rgba(63,185,80,0.3); }
+    .svc-card.offline .svc-badge { color: var(--red);   background: var(--red-dim);   border: 1px solid rgba(238,0,0,0.3); }
+    .svc-card.unknown .svc-badge { color: var(--yellow);background: var(--yellow-dim);border: 1px solid rgba(210,153,34,0.3); }
+
+    /* ── VM Grid ───────────────────────────────────────────────── */
+    .vm-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .vm-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+    .vm-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+
+    .vm-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .vm-name { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text); }
+    .vm-state {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .vm-state.running  { color: var(--green);  background: var(--green-dim);  border: 1px solid rgba(63,185,80,0.3); }
+    .vm-state.off      { color: var(--text-dim); background: var(--bg3); border: 1px solid var(--border); }
+    .vm-state.paused   { color: var(--yellow); background: var(--yellow-dim); border: 1px solid rgba(210,153,34,0.3); }
+
+    .vm-role { font-size: 11px; color: var(--text-muted); margin-bottom: 10px; }
+
+    .vm-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .vm-tag {
+      font-family: var(--font-mono); font-size: 10px;
+      padding: 2px 7px; border-radius: 4px;
+      color: var(--text-muted); background: var(--bg3);
+      border: 1px solid var(--border);
+    }
+    .vm-tag.k3s    { color: var(--blue);   border-color: rgba(88,166,255,0.3); background: var(--blue-dim); }
+    .vm-tag.aap    { color: var(--red);    border-color: rgba(238,0,0,0.3);    background: var(--red-dim); }
+    .vm-tag.infra  { color: var(--teal);   border-color: rgba(57,208,208,0.3); background: var(--teal-dim); }
+    .vm-tag.system { color: var(--purple); border-color: rgba(188,140,255,0.3);background: var(--purple-dim); }
+
+    .vm-btn-group { display: flex; gap: 6px; margin-top: 10px; }
+    .vm-btn {
+      flex: 1; padding: 5px 0;
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--bg3); color: var(--text-muted);
+      cursor: pointer; transition: all var(--transition);
+      text-align: center;
+    }
+    .vm-btn:hover { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+    .vm-btn.start { border-color: rgba(63,185,80,0.4); color: var(--green); }
+    .vm-btn.start:hover { background: var(--green-dim); }
+    .vm-btn.stop  { border-color: rgba(238,0,0,0.3); color: var(--text-dim); }
+    .vm-btn.stop:hover  { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+    /* ── Pods Table ─────────────────────────────────────────────── */
+    .pods-table { width: 100%; border-collapse: collapse; }
+    .pods-table th {
+      padding: 10px 14px;
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--text-muted);
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .pods-table td {
+      padding: 10px 14px;
+      font-family: var(--font-mono); font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pods-table tr:last-child td { border-bottom: none; }
+    .pods-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .pod-status.running { color: var(--green); }
+    .pod-status.pending { color: var(--yellow); }
+    .pod-status.failed  { color: var(--red); }
+
+    .restart-count {
+      display: inline-block;
+      padding: 2px 7px; border-radius: 10px;
+      font-size: 10px;
+    }
+    .restart-count.low  { color: var(--green);  background: var(--green-dim); }
+    .restart-count.med  { color: var(--yellow); background: var(--yellow-dim); }
+    .restart-count.high { color: var(--orange); background: var(--orange-dim); }
+
+    /* ── Footer ─────────────────────────────────────────────────── */
+    .footer-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      margin-top: 40px;
+    }
+    .footer-left { display: flex; align-items: center; gap: 20px; }
+    .footer-tag {
+      font-family: var(--font-mono); font-size: 10px;
+      color: var(--text-dim); letter-spacing: 1px;
+    }
+    .footer-tag strong { color: var(--blue); }
+    .footer-right { display: flex; align-items: center; gap: 12px; }
+
+    /* ── Refresh Button ─────────────────────────────────────────── */
+    .btn-refresh {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 20px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .btn-refresh:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+    .btn-refresh.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Progress bar (countdown) ───────────────────────────────── */
+    .progress-bar-wrap {
+      height: 3px; background: var(--bg3);
+      border-radius: 2px; overflow: hidden;
+      width: 120px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--teal));
+      border-radius: 2px;
+      transition: width 1s linear;
+    }
+
+    /* ── Notification toast ─────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 30px; right: 30px;
+      padding: 12px 20px;
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      font-family: var(--font-mono); font-size: 12px;
+      color: var(--green);
+      opacity: 0; transform: translateY(10px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Panel wrapper ──────────────────────────────────────────── */
+    .panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .panel-title {
+      font-family: var(--font-hud); font-size: 11px; letter-spacing: 2px;
+      color: var(--text-muted); text-transform: uppercase;
+    }
+    .panel-body { padding: 16px 18px; }
+
+    /* ── Storage pools ──────────────────────────────────────────── */
+    .storage-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .pool-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px;
+    }
+    .pool-name { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--orange); margin-bottom: 4px; }
+    .pool-path { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-bottom: 8px; }
+    .pool-bar-wrap { height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+    .pool-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--orange), var(--yellow)); transition: width 1s ease; }
+    .pool-stats { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+    /* ── Network cards ──────────────────────────────────────────── */
+    .net-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .net-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 14px 16px;
+      border-left: 3px solid var(--blue);
+    }
+    .net-name { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--blue); margin-bottom: 4px; }
+    .net-detail { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); line-height: 1.7; }
+    .net-detail strong { color: var(--text); }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .kpi-grid        { grid-template-columns: repeat(2,1fr); }
+      .services-grid   { grid-template-columns: repeat(2,1fr); }
+      .vm-grid         { grid-template-columns: repeat(2,1fr); }
+      .storage-grid    { grid-template-columns: repeat(2,1fr); }
+    }
+    @media (max-width: 700px) {
+      .kpi-grid        { grid-template-columns: 1fr 1fr; }
+      .services-grid   { grid-template-columns: 1fr; }
+      .vm-grid         { grid-template-columns: 1fr; }
+      .storage-grid    { grid-template-columns: 1fr; }
+      .net-grid        { grid-template-columns: 1fr; }
+      .header { flex-wrap: wrap; gap: 10px; }
+    }
+
+    /* ── Entry animations ───────────────────────────────────────── */
+    .fade-in {
+      opacity: 0; transform: translateY(16px);
+      animation: fade-up 0.5s ease forwards;
+    }
+    @keyframes fade-up {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in:nth-child(1)  { animation-delay: 0.05s; }
+    .fade-in:nth-child(2)  { animation-delay: 0.10s; }
+    .fade-in:nth-child(3)  { animation-delay: 0.15s; }
+    .fade-in:nth-child(4)  { animation-delay: 0.20s; }
+    .fade-in:nth-child(5)  { animation-delay: 0.25s; }
+    .fade-in:nth-child(6)  { animation-delay: 0.30s; }
+    .fade-in:nth-child(7)  { animation-delay: 0.35s; }
+    .fade-in:nth-child(8)  { animation-delay: 0.40s; }
+    .fade-in:nth-child(9)  { animation-delay: 0.45s; }
+
+    /* ── Loading shimmer ─────────────────────────────────────────── */
+    .shimmer {
+      background: linear-gradient(90deg, var(--bg3) 25%, var(--border) 50%, var(--bg3) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo">MISSION STATUS<span>DASHBOARD</span></div>
+    <div class="header-meta">
+      ENV: <strong>Lab</strong> &nbsp;|&nbsp;
+      HOST: <strong>kvmhost.lab.local</strong> &nbsp;|&nbsp;
+      VER: <strong>v2.0</strong>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="clock" id="clock">--:--:--</div>
+    <div id="overall-badge" class="status-badge ok">
+      <span class="status-dot"></span>
+      <span id="overall-text">ALL SYSTEMS GO</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main Content ────────────────────────────────────────────── -->
+<div class="layout">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card blue fade-in">
+      <div class="kpi-label">Services Online</div>
+      <div class="kpi-value" id="kpi-services">—</div>
+      <div class="kpi-sub">lab services</div>
+    </div>
+    <div class="kpi-card green fade-in">
+      <div class="kpi-label">Pods Running</div>
+      <div class="kpi-value" id="kpi-pods">4</div>
+      <div class="kpi-sub">k3s default ns</div>
+    </div>
+    <div class="kpi-card orange fade-in">
+      <div class="kpi-label">Last Check</div>
+      <div class="kpi-value" id="kpi-time" style="font-size:22px;padding-top:6px">—</div>
+      <div class="kpi-sub">auto-refresh 30s</div>
+    </div>
+    <div class="kpi-card purple fade-in">
+      <div class="kpi-label">Session Uptime</div>
+      <div class="kpi-value" id="kpi-uptime" style="font-size:28px;padding-top:4px">00:00:00</div>
+      <div class="kpi-sub">session</div>
+    </div>
+  </div>
+
+  <!-- Lab Services -->
+  <div class="section-header">
+    <span class="section-title">Lab Services</span>
+    <span class="section-line"></span>
+    <span class="section-count" id="svc-count">—/—</span>
+  </div>
+
+  <div class="services-grid" id="services-grid">
+    <!-- dynamically rendered -->
+  </div>
+
+  <!-- Virtual Machines -->
+  <div class="section-header" style="margin-top:36px;">
+    <span class="section-title">Virtual Machines — kvmhost</span>
+    <span class="section-line"></span>
+    <span class="section-count">9 VMs</span>
+  </div>
+
+  <div class="vm-grid" id="vm-grid">
+    <!-- dynamically rendered -->
+  </div>
+
+  <!-- K3s Pods -->
+  <div class="section-header" style="margin-top:36px;">
+    <span class="section-title">K3s Pods</span>
+    <span class="section-line"></span>
+    <span class="section-count" id="pods-count">—</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-title">All Namespaces</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted)">kubectl get pods -A</span>
+    </div>
+    <table class="pods-table" id="pods-table">
+      <thead>
+        <tr>
+          <th>Pod Name</th>
+          <th>Namespace</th>
+          <th>Status</th>
+          <th>Restarts</th>
+          <th>Age</th>
+        </tr>
+      </thead>
+      <tbody id="pods-body">
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Storage Pools -->
+  <div class="section-header" style="margin-top:36px;">
+    <span class="section-title">Storage Pools</span>
+    <span class="section-line"></span>
+    <span class="section-count">6 pools</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-body">
+      <div class="storage-grid" id="storage-grid"></div>
+    </div>
+  </div>
+
+  <!-- Networks -->
+  <div class="section-header" style="margin-top:36px;">
+    <span class="section-title">Virtual Networks</span>
+    <span class="section-line"></span>
+    <span class="section-count">2 networks</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-body">
+      <div class="net-grid" id="net-grid"></div>
+    </div>
+  </div>
+
+</div><!-- /layout -->
+
+<!-- Footer -->
+<footer class="footer-bar">
+  <div class="footer-left">
+    <span class="footer-tag">AAP 2.4 SINGLE-NODE LAB</span>
+    <span class="footer-tag">AUTHORED BY <strong>Allen Efienokwu</strong></span>
+    <span class="footer-tag">IMAGE: <strong>arkinfotech24/mission-status-app:v1</strong></span>
+  </div>
+  <div class="footer-right">
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progress-fill" style="width:100%"></div>
+    </div>
+    <button class="btn-refresh" id="refresh-btn" onclick="doRefresh()">
+      <svg class="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh Now
+    </button>
+  </div>
+</footer>
+
+<div id="toast"></div>
+
+<!-- ── Data & Logic ─────────────────────────────────────────────── -->
+<script>
+// ── Static Data ──────────────────────────────────────────────────
+const SERVICES = [
+  { name: 'Automation Controller', url: 'https://192.168.1.181:444/', urlLabel: '192.168.1.181:444', color: 'red',    status: 'online'  },
+  { name: 'Automation Hub',        url: 'https://192.168.1.181/hub/', urlLabel: '192.168.1.181/hub', color: 'blue',   status: 'online'  },
+  { name: 'EDA Controller',        url: 'https://192.168.1.181:8443/',urlLabel: '192.168.1.181:8443',color: 'purple', status: 'online'  },
+  { name: 'Prometheus',            url: 'http://prometheus.home.lab:8080/', urlLabel: 'prometheus.home.lab:8080', color: 'orange', status: 'online' },
+  { name: 'Grafana',               url: 'http://grafana.home.lab:8080/',    urlLabel: 'grafana.home.lab:8080',    color: 'orange', status: 'online' },
+  { name: 'ArgoCD',                url: 'https://argocd.home.lab:8443/',    urlLabel: 'argocd.home.lab:8443',     color: 'blue',   status: 'online' },
+  { name: 'Mission Dashboard',     url: 'http://mission.home.lab:8080/',    urlLabel: 'mission.home.lab:8080',    color: 'green',  status: 'online' },
+  { name: 'Cockpit',               url: 'https://kvmhost.home.lab:9090/',   urlLabel: 'kvmhost.home.lab:9090',    color: 'teal',   status: 'online' },
+];
+
+const VMS = [
+  { name: 'bootstrap', role: 'Bootstrap / Provisioning Node', tags: ['infra','system'],    state: 'off'  },
+  { name: 'master-1',  role: 'K3s Control Plane Node 1',      tags: ['k3s','system'],      state: 'off'  },
+  { name: 'master-2',  role: 'K3s Control Plane Node 2',      tags: ['k3s','system'],      state: 'off'  },
+  { name: 'master-3',  role: 'K3s Control Plane Node 3',      tags: ['k3s','system'],      state: 'off'  },
+  { name: 'repo',      role: 'Local Package / Repo Mirror',    tags: ['infra','system'],    state: 'off'  },
+  { name: 'servera',   role: 'AAP Ansible Managed Node A',    tags: ['aap','system'],      state: 'off'  },
+  { name: 'serverb',   role: 'AAP Ansible Managed Node B',    tags: ['aap','system'],      state: 'off'  },
+  { name: 'worker-1',  role: 'K3s Worker Node 1',             tags: ['k3s','system'],      state: 'off'  },
+  { name: 'worker-2',  role: 'K3s Worker Node 2',             tags: ['k3s','system'],      state: 'off'  },
+];
+
+const PODS = [
+  { name: 'mission-status-888cdd88-7ncdm',  ns: 'default',     status: 'running', restarts: 6, age: '12d' },
+  { name: 'mission-status-888cdd88-n4gkm',  ns: 'default',     status: 'running', restarts: 6, age: '12d' },
+  { name: 'mission-status-75c4db864d-8f58z', ns: 'mission-dev', status: 'running', restarts: 5, age: '8d'  },
+  { name: 'mission-status-75c4db864d-gjm1z', ns: 'mission-dev', status: 'running', restarts: 5, age: '8d'  },
+];
+
+const STORAGE = [
+  { name: 'default',     path: '/var/lib/libvirt/images',  used: 62, total: '500G', vols: 6   },
+  { name: 'boot-scratch',path: '/var/lib/libvirt/boot',    used: 18, total: '50G',  vols: 1   },
+  { name: 'images',      path: '/var/lib/libvirt/images2', used: 44, total: '200G', vols: null },
+  { name: 'vmstore',     path: '/vmstore',                 used: 31, total: '1T',   vols: null },
+  { name: 'nfs-pool',    path: 'nfs://nas/vm-pool',        used: 55, total: '2T',   vols: null },
+  { name: 'backup',      path: '/backup/kvm',              used: 22, total: '500G', vols: null },
+];
+
+const NETWORKS = [
+  { name: 'default',    type: 'NAT',    cidr: '192.168.122.0/24', iface: 'virbr0', state: 'Active', desc: 'VM internet access via NAT gateway' },
+  { name: 'lab-bridge', type: 'Bridge', cidr: '192.168.1.0/24',   iface: 'br0',    state: 'Active', desc: 'Direct LAN — AAP 2.4, K3s nodes, managed VMs' },
+];
+
+// ── State ─────────────────────────────────────────────────────────
+let startTime    = Date.now();
+let refreshTimer = 30;
+let vmStates     = Object.fromEntries(VMS.map(v => [v.name, v.state]));
+let svcStates    = Object.fromEntries(SERVICES.map(s => [s.name, s.status]));
+
+// ── Render: Services ─────────────────────────────────────────────
+function renderServices() {
+  const grid = document.getElementById('services-grid');
+  grid.innerHTML = '';
+  SERVICES.forEach((s, i) => {
+    const st = svcStates[s.name] || 'unknown';
+    const label = st.toUpperCase();
+    grid.insertAdjacentHTML('beforeend', `
+      <a class="svc-card ${st} fade-in" href="${s.url}" target="_blank" rel="noopener" title="Open ${s.name}">
+        <span class="svc-dot"></span>
+        <div class="svc-info">
+          <div class="svc-name">${s.name}</div>
+          <div class="svc-url">${s.urlLabel}</div>
+        </div>
+        <span class="svc-badge">${label}</span>
+      </a>
+    `);
+  });
+  const online = Object.values(svcStates).filter(v => v === 'online').length;
+  document.getElementById('svc-count').textContent = `${online}/${SERVICES.length}`;
+  document.getElementById('kpi-services').textContent = `${online}/${SERVICES.length}`;
+  // Overall badge
+  const badge = document.getElementById('overall-badge');
+  const txt   = document.getElementById('overall-text');
+  if (online === SERVICES.length) {
+    badge.className = 'status-badge ok';
+    txt.textContent = 'ALL SYSTEMS GO';
+  } else {
+    badge.className = 'status-badge deg';
+    txt.textContent = 'DEGRADED';
+  }
+}
+
+// ── Render: VMs ──────────────────────────────────────────────────
+function renderVMs() {
+  const grid = document.getElementById('vm-grid');
+  grid.innerHTML = '';
+  VMS.forEach(v => {
+    const st = vmStates[v.name];
+    const stateLabel = st === 'running' ? 'RUNNING' : st === 'paused' ? 'PAUSED' : 'SHUT OFF';
+    const tags = v.tags.map(t => `<span class="vm-tag ${t}">${t.toUpperCase()}</span>`).join('');
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="vm-card fade-in">
+        <div class="vm-card-top">
+          <span class="vm-name">${v.name}</span>
+          <span class="vm-state ${st}">${stateLabel}</span>
+        </div>
+        <div class="vm-role">${v.role}</div>
+        <div class="vm-tags">${tags}</div>
+        <div class="vm-btn-group">
+          <button class="vm-btn start" onclick="toggleVM('${v.name}', 'start')">▶ Start</button>
+          <button class="vm-btn stop"  onclick="toggleVM('${v.name}', 'stop')">■ Stop</button>
+        </div>
+      </div>
+    `);
+  });
+}
+
+// ── Render: Pods ─────────────────────────────────────────────────
+function renderPods() {
+  const tbody = document.getElementById('pods-body');
+  tbody.innerHTML = '';
+  PODS.forEach(p => {
+    const rClass = p.restarts <= 3 ? 'low' : p.restarts <= 6 ? 'med' : 'high';
+    tbody.insertAdjacentHTML('beforeend', `
+      <tr>
+        <td style="font-family:var(--font-mono);color:var(--text)">${p.name}</td>
+        <td style="color:var(--text-muted)">${p.ns}</td>
+        <td><span class="pod-status ${p.status}">${p.status.charAt(0).toUpperCase()+p.status.slice(1)}</span></td>
+        <td><span class="restart-count ${rClass}">${p.restarts}</span></td>
+        <td style="color:var(--text-dim)">${p.age}</td>
+      </tr>
+    `);
+  });
+  document.getElementById('pods-count').textContent =
+    `${PODS.filter(p=>p.status==='running').length} running / ${PODS.length} total`;
+}
+
+// ── Render: Storage ───────────────────────────────────────────────
+function renderStorage() {
+  const grid = document.getElementById('storage-grid');
+  grid.innerHTML = '';
+  STORAGE.forEach(s => {
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="pool-card">
+        <div class="pool-name">${s.name}</div>
+        <div class="pool-path">${s.path}</div>
+        <div class="pool-bar-wrap"><div class="pool-bar-fill" style="width:${s.used}%"></div></div>
+        <div class="pool-stats">
+          <span>${s.used}% used</span>
+          <span>${s.total}${s.vols ? ' · ' + s.vols + ' vols' : ''}</span>
+        </div>
+      </div>
+    `);
+  });
+}
+
+// ── Render: Networks ─────────────────────────────────────────────
+function renderNetworks() {
+  const grid = document.getElementById('net-grid');
+  grid.innerHTML = '';
+  NETWORKS.forEach(n => {
+    grid.insertAdjacentHTML('beforeend', `
+      <div class="net-card">
+        <div class="net-name">${n.name}</div>
+        <div class="net-detail">
+          <strong>${n.type}</strong> · ${n.cidr}<br/>
+          Interface: <strong>${n.iface}</strong> · State: <strong style="color:var(--green)">${n.state}</strong><br/>
+          ${n.desc}
+        </div>
+      </div>
+    `);
+  });
+}
+
+// ── VM Toggle (simulated) ─────────────────────────────────────────
+function toggleVM(name, action) {
+  if (action === 'start') {
+    vmStates[name] = 'running';
+    showToast(`▶ ${name} — starting...`);
+  } else {
+    vmStates[name] = 'off';
+    showToast(`■ ${name} — shutting down...`);
+  }
+  renderVMs();
+}
+
+// ── Clock ─────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-US', { hour12: true });
+  document.getElementById('kpi-time').textContent =
+    now.toLocaleTimeString('en-US', { hour12: false, hour:'2-digit', minute:'2-digit' });
+}
+
+// ── Uptime ─────────────────────────────────────────────────────────
+function updateUptime() {
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  document.getElementById('kpi-uptime').textContent = `${h}:${m}:${ss}`;
+}
+
+// ── Countdown progress bar ────────────────────────────────────────
+function updateProgress() {
+  refreshTimer--;
+  if (refreshTimer <= 0) { doRefresh(); return; }
+  const pct = (refreshTimer / 30) * 100;
+  document.getElementById('progress-fill').style.width = pct + '%';
+}
+
+// ── Refresh ───────────────────────────────────────────────────────
+function doRefresh() {
+  refreshTimer = 30;
+  document.getElementById('progress-fill').style.width = '100%';
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('spinning');
+  // Simulate a brief "checking" state
+  setTimeout(() => {
+    btn.classList.remove('spinning');
+    renderAll();
+    showToast('✓ Dashboard refreshed');
+  }, 600);
+}
+
+function renderAll() {
+  renderServices();
+  renderVMs();
+  renderPods();
+  renderStorage();
+  renderNetworks();
+  updateClock();
+}
+
+// ── Toast ─────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+renderAll();
+setInterval(updateClock,   1000);
+setInterval(updateUptime,  1000);
+setInterval(updateProgress,1000);
+</script>
+</body>
+</html>
